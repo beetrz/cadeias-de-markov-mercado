@@ -10,9 +10,13 @@ pip install matplotlib
 python markov_mercado.py
 ```
 
-O programa pergunta se deve usar o exemplo de nuvem ou se quer digitar sua própria matriz. Ele gera o gráfico `evolucao_markov.png` na mesma pasta.
+O programa pergunta se o usuário deseja utilizar o exemplo de provedores de nuvem ou informar sua própria matriz de transição e vetor inicial.
+
+Ao final da execução, é gerado um gráfico com a evolução das probabilidades e o estado estacionário, salvo na pasta `grafico-evolucao`.
+
+Para evitar sobrescrever gráficos anteriores, os arquivos recebem nomes únicos automaticamente (`evolucao_markov.png`, `evolucao_markov_1.png`, `evolucao_markov_2.png` etc.). A pasta é criada automaticamente caso não exista.
 
 ## Integrantes
-Beatriz Martins de Lucena
-Jessica Arruda de Jesus
-Lucas Lopes Rodrigues da Silva
+- Beatriz Martins de Lucena
+- Jessica Arruda de Jesus
+- Lucas Lopes Rodrigues da Silva

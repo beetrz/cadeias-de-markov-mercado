@@ -4,6 +4,7 @@
 # calcula a evolução após k passos, o estado estacionário e gera um gráfico.
 # Teoria e a aplicação estão explicadas no README.md.
 
+import os
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use("Agg")  # salva o gráfico em arquivo, sem abrir janela
@@ -52,16 +53,19 @@ def determinante(A):
     for c in range(n):
         # escolhe como pivô o maior valor absoluto da coluna (estabilidade)
         p = max(range(c, n), key=lambda r: abs(M[r][c]))
+        
         if abs(M[p][c]) < 1e-12:
             return 0.0                      # coluna nula -> det = 0
         if p != c:
             M[c], M[p] = M[p], M[c]
             det = -det                      # troca de linhas inverte o sinal
+            
         det *= M[c][c]
         for r in range(c + 1, n):           # zera abaixo do pivô
             f = M[r][c] / M[c][c]
             for j in range(c, n):
                 M[r][j] -= f * M[c][j]
+
     return det
 
 
@@ -69,17 +73,22 @@ def determinante(A):
 # Retorna None se o sistema for singular
 def resolver_sistema(A, b):
     n = len(A)
+
     # matriz aumentada [A | b]
     M = [A[i][:] + [b[i]] for i in range(n)]
     for c in range(n):
         p = max(range(c, n), key=lambda r: abs(M[r][c]))
+
         if abs(M[p][c]) < 1e-12:
             return None
+        
         M[c], M[p] = M[p], M[c]
+
         for r in range(c + 1, n):
             f = M[r][c] / M[c][c]
             for j in range(c, n + 1):
                 M[r][j] -= f * M[c][j]
+
     # substituição regressiva
     x = [0.0] * n
     for i in range(n - 1, -1, -1):
@@ -94,38 +103,44 @@ def resolver_sistema(A, b):
 # Levanta ValueError com mensagem clara em caso de problema
 def validar_entrada(P, x0, tol=1e-9):
     n = len(P)
+
     if any(len(l) != n for l in P):
         raise ValueError("A matriz de transição deve ser quadrada.")
+    
     if len(x0) != n:
         raise ValueError("O vetor inicial deve ter tamanho n = %d." % n)
+    
     for i, linha in enumerate(P):
         if any(v < 0 for v in linha):
             raise ValueError("Probabilidades negativas na linha %d." % (i + 1))
         if abs(sum(linha) - 1) > tol:
             raise ValueError(
                 "A linha %d soma %.6f (deve somar 1)." % (i + 1, sum(linha)))
+        
     if any(v < 0 for v in x0) or abs(sum(x0) - 1) > tol:
         raise ValueError("O vetor inicial deve ser não negativo e somar 1.")
 
 # --> Evolução do sistema
 
 # Aplica x_{t+1} = x_t * P por k passos. Retorna a lista [x_0, ..., x_k]
-
-
 def evoluir(P, x0, k):
     historico = [x0[:]]
     x = x0[:]
+
     for _ in range(k):
         x = mult_vetor_matriz(x, P)
         historico.append(x)
+    
     return historico
 
 
 # Calcula P^k por multiplicações sucessivas (confere x_k = x_0 P^k)
 def potencia_matriz(P, k):
     R = identidade(len(P))
+
     for _ in range(k):
         R = mult_matrizes(R, P)
+    
     return R
 
 # --> Estado estacionário
@@ -139,10 +154,11 @@ def estado_estacionario_linear(P):
     n = len(P)
     Pt = transposta(P)
     A = [[Pt[i][j] - (1.0 if i == j else 0.0)
-          for j in range(n)] for i in range(n)]
+        for j in range(n)] for i in range(n)]
     b = [0.0] * n
     A[n - 1] = [1.0] * n        # última linha: π1 + ... + πn = 1
     b[n - 1] = 1.0
+
     return resolver_sistema(A, b)
 
 
@@ -150,11 +166,13 @@ def estado_estacionario_linear(P):
 # Retorna (vetor, passos). Se não convergir, vetor é None
 def estado_estacionario_convergencia(P, x0, tol=1e-10, max_passos=100000):
     x = x0[:]
+
     for t in range(1, max_passos + 1):
         novo = mult_vetor_matriz(x, P)
         if max(abs(novo[i] - x[i]) for i in range(len(x))) < tol:
             return novo, t
         x = novo
+    
     return None, max_passos
 
 
@@ -163,10 +181,12 @@ def estado_estacionario_convergencia(P, x0, tol=1e-10, max_passos=100000):
 def eh_regular(P):
     n = len(P)
     R = [linha[:] for linha in P]
+    
     for _ in range((n - 1) ** 2 + 1):
         if all(R[i][j] > 1e-15 for i in range(n) for j in range(n)):
             return True
         R = mult_matrizes(R, P)
+    
     return False
 
 
@@ -175,26 +195,42 @@ def eh_regular(P):
 def estimar_lambda2(historico, pi):
     def dist(x):
         return sum(abs(x[i] - pi[i]) for i in range(len(pi)))
+    
     for t in range(len(historico) - 2, 0, -1):   # pega último ponto ainda não-nulo
         d0, d1 = dist(historico[t]), dist(historico[t + 1])
         if d0 > 1e-12:
             return d1 / d0
+    
     return None
+
 
 # --> Gráfico
 
-# ""Plota"" a probabilidade de cada estado por passo e a linha do estado estacionário
+# Verifica o nome do arquivo para gerar nomes únicos
+def gerar_nome_unico(arquivo):
+    nome, extensao = os.path.splitext(arquivo)
+    contador = 1
+
+    while os.path.exists(arquivo):
+        arquivo = f"{nome}_{contador}{extensao}"
+        contador += 1
+
+    return arquivo
 
 
-def plotar(historico, nomes, pi, arquivo="evolucao_markov.png"):
+# Plota a probabilidade de cada estado por passo e a linha do estado estacionário
+def plotar(historico, nomes, pi, arquivo="grafico-evolucao/evolucao_markov.png"):
     passos = list(range(len(historico)))
     plt.figure(figsize=(9, 5))
+
     for i, nome in enumerate(nomes):
         serie = [h[i] for h in historico]
         linha, = plt.plot(passos, serie, marker="o", markersize=3, label=nome)
-        if pi is not None:                       # linha tracejada = limite
+
+        if pi is not None:      # linha tracejada = limite
             plt.axhline(pi[i], color=linha.get_color(),
                         linestyle="--", alpha=0.5)
+
     plt.title(
         "Evolução da participação de mercado (tracejado = estado estacionário)")
     plt.xlabel("Passo (trimestre)")
@@ -202,7 +238,16 @@ def plotar(historico, nomes, pi, arquivo="evolucao_markov.png"):
     plt.grid(alpha=0.3)
     plt.legend()
     plt.tight_layout()
+
+    # Cria a pasta caso ela ainda não exista
+    pasta = os.path.dirname(arquivo)
+    if pasta:
+        os.makedirs(pasta, exist_ok=True)
+
+    arquivo = gerar_nome_unico(arquivo)
     plt.savefig(arquivo, dpi=150)
+    plt.close()
+
     return arquivo
 
 
@@ -232,7 +277,7 @@ def relatorio(P, x0, k, nomes, historico, pi_lin, pi_conv, passos_conv):
     print("Conferência x0·P^k vs iteração (erro máx): %.2e" % erro)
 
     print("\ndet(P - I) = %.2e  -> ≈ 0 confirma que λ = 1 é autovalor." %
-          determinante(P_menos_I))
+        determinante(P_menos_I))
     regular = eh_regular(P)
     print("Cadeia regular (alguma potência de P é positiva)?",
           "SIM" if regular else "NÃO")
@@ -243,9 +288,9 @@ def relatorio(P, x0, k, nomes, historico, pi_lin, pi_conv, passos_conv):
     print("\nEstado estacionário (sistema linear):", fmt(pi_lin))
     if pi_conv is not None:
         print("Estado estacionário (convergência)  :", fmt(pi_conv),
-              "(%d passos)" % passos_conv)
+            "(%d passos)" % passos_conv)
         print("Diferença entre os métodos: %.2e" %
-              max(abs(pi_lin[i] - pi_conv[i]) for i in range(n)))
+            max(abs(pi_lin[i] - pi_conv[i]) for i in range(n)))
 
     lam2 = estimar_lambda2(evoluir(P, x0, 200), pi_lin)
     # Interpretação
@@ -254,15 +299,18 @@ def relatorio(P, x0, k, nomes, historico, pi_lin, pi_conv, passos_conv):
     dom = max(range(n), key=lambda i: pi_lin[i])
     print("- No longo prazo, '%s' domina o mercado com %.2f%%." %
           (nomes[dom], 100 * pi_lin[dom]))
+    
     for i in range(n):
         delta = pi_lin[i] - x0[i]
         tend = "ganha" if delta > 0 else "perde"
         print("- %-14s %s %.2f p.p. em relação ao início (%.2f%% -> %.2f%%)."
               % (nomes[i], tend, abs(100 * delta), 100 * x0[i], 100 * pi_lin[i]))
+    
     if regular:
         print("- Como a cadeia é regular, o resultado NÃO depende do estado inicial.")
     if lam2 is not None:
         print("- |λ2| ≈ %.3f: o erro cai por esse fator a cada passo (quanto menor, mais rápido)." % lam2)
+    
     print("- Tempo médio entre visitas ao estado i no equilíbrio: 1/πi passos.")
     print("  " + "; ".join("%s: %.1f" %
           (nomes[i], 1 / pi_lin[i]) for i in range(n) if pi_lin[i] > 0))
@@ -272,15 +320,95 @@ def relatorio(P, x0, k, nomes, historico, pi_lin, pi_conv, passos_conv):
 
 # ----> Programa principal
 
+# Lê um número inteiro e verifica se está dentro do limite permitido
+def ler_inteiro(mensagem, minimo=None):
+    while True:
+        entrada = input(mensagem).strip()
+        if not entrada:
+            print("Erro: o campo não pode ficar vazio.")
+            continue
+        try:
+            valor = int(entrada)
+        except ValueError:
+            print("Erro: digite um número inteiro válido.")
+            continue
+        if minimo is not None and valor < minimo:
+            print("Erro: o valor deve ser maior ou igual a", minimo)
+            continue
+        
+        return valor
+
+# Lê uma quantidade específica de números decimais
+def ler_numeros(mensagem, quantidade):
+    while True:
+        entrada = input(mensagem).strip()
+        if not entrada:
+            print("Erro: o campo não pode ficar vazio.")
+            continue
+        try:
+            valores = [float(v) for v in entrada.split()]
+        except ValueError:
+            print("Erro: digite apenas números.")
+            continue
+        
+        if len(valores) != quantidade:
+            print("Erro: digite exatamente", quantidade, "números.")
+            continue
+        if not all(v == v and abs(v) != float("inf") for v in valores):
+            print("Erro: os valores devem ser números finitos.")
+            continue
+        
+        return valores
+
 # Lê do teclado nomes, matriz P, vetor x0 e k
+
 def ler_matriz():
-    n = int(input("Número de estados n: "))
-    nomes = [input("Nome do estado %d: " % (i + 1)) for i in range(n)]
+    n = ler_inteiro("Número de estados n: ", minimo=1)
+
+    nomes = []
+
+    for i in range(n):
+        while True:
+            nome = input("Nome do estado %d: " % (i + 1)).strip()
+
+            if nome:
+                nomes.append(nome)
+                break
+
+            print("Erro: o nome não pode ficar vazio.")
+
     print("Digite cada linha de P (n números separados por espaço):")
-    P = [[float(v) for v in input("Linha %d: " % (i + 1)).split()]
-         for i in range(n)]
-    x0 = [float(v) for v in input("Vetor inicial (n números): ").split()]
-    k = int(input("Número de passos k: "))
+    P = []
+
+    for i in range(n):
+        while True:
+            linha = ler_numeros("Linha %d: " % (i + 1), n)
+            
+            if any(v < 0 for v in linha):
+                print("Erro: probabilidades não podem ser negativas.")
+                continue
+            
+            if abs(sum(linha) - 1) > 1e-9:
+                print("Erro: a linha deve somar 1.")
+                continue
+            
+            P.append(linha)
+            break
+
+    while True:
+        x0 = ler_numeros("Vetor inicial (n números): ", n)
+
+        if any(v < 0 for v in x0):
+            print("Erro: probabilidades não podem ser negativas.")
+            continue
+
+        if abs(sum(x0) - 1) > 1e-9:
+            print("Erro: o vetor inicial deve somar 1.")
+            continue
+        break
+
+    k = ler_inteiro("Número de passos k: ", minimo=0)
+    
     return nomes, P, x0, k
 
 
